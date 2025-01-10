@@ -1,21 +1,27 @@
-import z from "zod";
+/* eslint-disable import/no-relative-packages -- required for importing types */
+import { z } from "zod";
 
-export const ZEventProperties = z.record(z.string());
-export { ZActionClassNoCodeConfig } from "@formbricks/types/actionClasses";
-export { ZIntegrationConfig } from "@formbricks/types/integration";
+export const ZActionProperties = z.record(z.string());
+export { ZActionClassNoCodeConfig } from "../types/action-classes";
+export { ZIntegrationConfig } from "../types/integration";
 
-export { ZResponseData, ZResponsePersonAttributes, ZResponseMeta } from "@formbricks/types/responses";
+export { ZResponseData, ZResponseMeta, ZResponseTtc } from "../types/responses";
 
 export {
   ZSurveyWelcomeCard,
   ZSurveyQuestions,
-  ZSurveyThankYouCard,
   ZSurveyHiddenFields,
+  ZSurveyVariables,
   ZSurveyClosedMessage,
-  ZSurveyProductOverwrites,
-  ZSurveyVerifyEmail,
+  ZSurveyProjectOverwrites,
+  ZSurveyStyling,
   ZSurveySingleUse,
-} from "@formbricks/types/surveys";
+  ZSurveyInlineTriggers,
+  ZSurveyEnding,
+} from "../types/surveys/types";
 
-export { ZTeamBilling } from "@formbricks/types/teams";
-export { ZUserNotificationSettings } from "@formbricks/types/users";
+export { ZSurveyFollowUpAction, ZSurveyFollowUpTrigger } from "./types/survey-follow-up";
+
+export { ZSegmentFilters } from "../types/segment";
+export { ZOrganizationBilling, ZOrganizationWhitelabel } from "../types/organizations";
+export { ZUserNotificationSettings } from "../types/user";

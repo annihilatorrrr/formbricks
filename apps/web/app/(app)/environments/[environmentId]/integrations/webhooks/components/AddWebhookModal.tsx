@@ -1,21 +1,22 @@
-import SurveyCheckboxGroup from "@/app/(app)/environments/[environmentId]/integrations/webhooks/components/SurveyCheckboxGroup";
-import TriggerCheckboxGroup from "@/app/(app)/environments/[environmentId]/integrations/webhooks/components/TriggerCheckboxGroup";
-import { triggers } from "@/app/(app)/environments/[environmentId]/integrations/webhooks/components/HardcodedTriggers";
-import { testEndpoint } from "@/app/(app)/environments/[environmentId]/integrations/webhooks/components/testEndpoint";
-import { Modal } from "@formbricks/ui/Modal";
-import { createWebhookAction } from "../actions";
-import { TPipelineTrigger } from "@formbricks/types/pipelines";
-import { TSurvey } from "@formbricks/types/surveys";
-import { TWebhookInput } from "@formbricks/types/webhooks";
-import { Button } from "@formbricks/ui/Button";
-import { Input } from "@formbricks/ui/Input";
-import { Label } from "@formbricks/ui/Label";
+import { SurveyCheckboxGroup } from "@/app/(app)/environments/[environmentId]/integrations/webhooks/components/SurveyCheckboxGroup";
+import { TriggerCheckboxGroup } from "@/app/(app)/environments/[environmentId]/integrations/webhooks/components/TriggerCheckboxGroup";
+import { validWebHookURL } from "@/app/(app)/environments/[environmentId]/integrations/webhooks/lib/utils";
+import { getFormattedErrorMessage } from "@/lib/utils/helper";
+import { Button } from "@/modules/ui/components/button";
+import { Input } from "@/modules/ui/components/input";
+import { Label } from "@/modules/ui/components/label";
+import { Modal } from "@/modules/ui/components/modal";
 import clsx from "clsx";
 import { Webhook } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import toast from "react-hot-toast";
+import { TPipelineTrigger } from "@formbricks/types/pipelines";
+import { TSurvey } from "@formbricks/types/surveys/types";
+import { TWebhookInput } from "@formbricks/types/webhooks";
+import { createWebhookAction, testEndpointAction } from "../actions";
 
 interface AddWebhookModalProps {
   environmentId: string;
@@ -24,7 +25,7 @@ interface AddWebhookModalProps {
   setOpen: (v: boolean) => void;
 }
 
-export default function AddWebhookModal({ environmentId, surveys, open, setOpen }: AddWebhookModalProps) {
+export const AddWebhookModal = ({ environmentId, surveys, open, setOpen }: AddWebhookModalProps) => {
   const router = useRouter();
   const {
     handleSubmit,
@@ -32,7 +33,7 @@ export default function AddWebhookModal({ environmentId, surveys, open, setOpen 
     register,
     formState: { isSubmitting },
   } = useForm();
-
+  const t = useTranslations();
   const [testEndpointInput, setTestEndpointInput] = useState("");
   const [hittingEndpoint, setHittingEndpoint] = useState<boolean>(false);
   const [endpointAccessible, setEndpointAccessible] = useState<boolean>();
@@ -43,15 +44,32 @@ export default function AddWebhookModal({ environmentId, surveys, open, setOpen 
 
   const handleTestEndpoint = async (sendSuccessToast: boolean) => {
     try {
+      const { valid, error } = validWebHookURL(testEndpointInput);
+      if (!valid) {
+        toast.error(error ?? t("common.something_went_wrong_please_try_again"));
+        return;
+      }
       setHittingEndpoint(true);
-      await testEndpoint(testEndpointInput);
+      const testEndpointActionResult = await testEndpointAction({ url: testEndpointInput });
+      if (!testEndpointActionResult?.data) {
+        const errorMessage = getFormattedErrorMessage(testEndpointActionResult);
+        throw new Error(errorMessage);
+      }
       setHittingEndpoint(false);
-      if (sendSuccessToast) toast.success("Yay! We are able to ping the webhook!");
+      if (sendSuccessToast) toast.success(t("environments.integrations.webhooks.endpoint_pinged"));
       setEndpointAccessible(true);
       return true;
     } catch (err) {
       setHittingEndpoint(false);
-      toast.error("Oh no! We are unable to ping the webhook!");
+      toast.error(
+        `${t("environments.integrations.webhooks.endpoint_pinged_error")} \n ${
+          err.message.length < 250
+            ? `${t("common.error")}:  ${err.message}`
+            : t("environments.integrations.webhooks.please_check_console")
+        }`,
+        { className: err.message.length < 250 ? "break-all" : "" }
+      );
+      console.error(t("environments.integrations.webhooks.webhook_test_failed_due_to"), err.message);
       setEndpointAccessible(false);
       return false;
     }
@@ -83,14 +101,14 @@ export default function AddWebhookModal({ environmentId, surveys, open, setOpen 
       try {
         setCreatingWebhook(true);
         if (!testEndpointInput || testEndpointInput === "") {
-          throw new Error("Please enter a URL");
+          throw new Error(t("environments.integrations.webhooks.please_enter_a_url"));
         }
         if (selectedTriggers.length === 0) {
-          throw new Error("Please select at least one trigger");
+          throw new Error(t("common.please_select_at_least_one_trigger"));
         }
 
         if (!selectedAllSurveys && selectedSurveys.length === 0) {
-          throw new Error("Please select at least one survey");
+          throw new Error(t("common.please_select_at_least_one_survey"));
         }
 
         const endpointHitSuccessfully = await handleTestEndpoint(false);
@@ -104,10 +122,18 @@ export default function AddWebhookModal({ environmentId, surveys, open, setOpen 
           surveyIds: selectedSurveys,
         };
 
-        await createWebhookAction(environmentId, updatedData);
-        router.refresh();
-        setOpenWithStates(false);
-        toast.success("Webhook added successfully.");
+        const createWebhookActionResult = await createWebhookAction({
+          environmentId,
+          webhookInput: updatedData,
+        });
+        if (createWebhookActionResult?.data) {
+          router.refresh();
+          setOpenWithStates(false);
+          toast.success(t("environments.integrations.webhooks.webhook_added_successfully"));
+        } else {
+          const errorMessage = getFormattedErrorMessage(createWebhookActionResult);
+          toast.error(errorMessage);
+        }
       } catch (e) {
         toast.error(e.message);
       } finally {
@@ -127,7 +153,7 @@ export default function AddWebhookModal({ environmentId, surveys, open, setOpen 
   };
 
   return (
-    <Modal open={open} setOpen={setOpenWithStates} noPadding closeOnOutsideClick={false}>
+    <Modal open={open} setOpen={setOpenWithStates} noPadding closeOnOutsideClick={true}>
       <div className="flex h-full flex-col rounded-lg">
         <div className="rounded-t-lg bg-slate-100">
           <div className="flex w-full items-center justify-between p-6">
@@ -136,8 +162,12 @@ export default function AddWebhookModal({ environmentId, surveys, open, setOpen 
                 <Webhook />
               </div>
               <div>
-                <div className="text-xl font-medium text-slate-700">Add Webhook</div>
-                <div className="text-sm text-slate-500">Send survey response data to a custom endpoint</div>
+                <div className="text-xl font-medium text-slate-700">
+                  {t("environments.integrations.webhooks.add_webhook")}
+                </div>
+                <div className="text-sm text-slate-500">
+                  {t("environments.integrations.webhooks.add_webhook_description")}
+                </div>
               </div>
             </div>
           </div>
@@ -146,19 +176,19 @@ export default function AddWebhookModal({ environmentId, surveys, open, setOpen 
           <div className="flex justify-between rounded-lg p-6">
             <div className="w-full space-y-4">
               <div className="col-span-1">
-                <Label htmlFor="name">Name</Label>
+                <Label htmlFor="name">{t("common.name")}</Label>
                 <div className="mt-1 flex">
                   <Input
                     type="text"
                     id="name"
                     {...register("name")}
-                    placeholder="Optional: Label your webhook for easy identification"
+                    placeholder={t("environments.integrations.webhooks.webhook_name_placeholder")}
                   />
                 </div>
               </div>
 
               <div className="col-span-1">
-                <Label htmlFor="URL">URL</Label>
+                <Label htmlFor="URL">{t("common.url")}</Label>
                 <div className="mt-1 flex">
                   <Input
                     type="url"
@@ -171,30 +201,30 @@ export default function AddWebhookModal({ environmentId, surveys, open, setOpen 
                       endpointAccessible === true
                         ? "border-green-500 bg-green-50"
                         : endpointAccessible === false
-                        ? "border-red-200 bg-red-50"
-                        : endpointAccessible === undefined
-                        ? "border-slate-200 bg-white"
-                        : null
+                          ? "border-red-200 bg-red-50"
+                          : endpointAccessible === undefined
+                            ? "border-slate-200 bg-white"
+                            : null
                     )}
-                    placeholder="Paste the URL you want the event to trigger on"
+                    placeholder={t("environments.integrations.webhooks.webhook_url_placeholder")}
                   />
                   <Button
                     type="button"
                     variant="secondary"
                     loading={hittingEndpoint}
                     className="ml-2 whitespace-nowrap"
+                    disabled={testEndpointInput.trim() === ""}
                     onClick={() => {
                       handleTestEndpoint(true);
                     }}>
-                    Test Endpoint
+                    {t("environments.integrations.webhooks.test_endpoint")}
                   </Button>
                 </div>
               </div>
 
               <div>
-                <Label htmlFor="Triggers">Triggers</Label>
+                <Label htmlFor="Triggers">{t("environments.integrations.webhooks.triggers")}</Label>
                 <TriggerCheckboxGroup
-                  triggers={triggers}
                   selectedTriggers={selectedTriggers}
                   onCheckboxChange={handleCheckboxChange}
                   allowChanges={true}
@@ -202,7 +232,7 @@ export default function AddWebhookModal({ environmentId, surveys, open, setOpen 
               </div>
 
               <div>
-                <Label htmlFor="Surveys">Surveys</Label>
+                <Label htmlFor="Surveys">{t("common.surveys")}</Label>
                 <SurveyCheckboxGroup
                   surveys={surveys}
                   selectedSurveys={selectedSurveys}
@@ -218,14 +248,14 @@ export default function AddWebhookModal({ environmentId, surveys, open, setOpen 
             <div className="flex space-x-2">
               <Button
                 type="button"
-                variant="minimal"
+                variant="ghost"
                 onClick={() => {
                   setOpenWithStates(false);
                 }}>
-                Cancel
+                {t("common.cancel")}
               </Button>
-              <Button variant="darkCTA" type="submit" loading={creatingWebhook}>
-                Add Webhook
+              <Button type="submit" loading={creatingWebhook}>
+                {t("environments.integrations.webhooks.add_webhook")}
               </Button>
             </div>
           </div>
@@ -233,4 +263,4 @@ export default function AddWebhookModal({ environmentId, surveys, open, setOpen 
       </div>
     </Modal>
   );
-}
+};

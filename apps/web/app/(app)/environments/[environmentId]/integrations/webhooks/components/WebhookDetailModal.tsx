@@ -1,33 +1,30 @@
-import ModalWithTabs from "@formbricks/ui/ModalWithTabs";
-import { TWebhook } from "@formbricks/types/webhooks";
-import WebhookOverviewTab from "@/app/(app)/environments/[environmentId]/integrations/webhooks/components/WebhookOverviewTab";
-import WebhookSettingsTab from "@/app/(app)/environments/[environmentId]/integrations/webhooks/components/WebhookSettingsTab";
-import { TSurvey } from "@formbricks/types/surveys";
+import { WebhookOverviewTab } from "@/app/(app)/environments/[environmentId]/integrations/webhooks/components/WebhookOverviewTab";
+import { WebhookSettingsTab } from "@/app/(app)/environments/[environmentId]/integrations/webhooks/components/WebhookSettingsTab";
+import { ModalWithTabs } from "@/modules/ui/components/modal-with-tabs";
 import { Webhook } from "lucide-react";
+import { useTranslations } from "next-intl";
+import { TSurvey } from "@formbricks/types/surveys/types";
+import { TWebhook } from "@formbricks/types/webhooks";
 
 interface WebhookModalProps {
-  environmentId: string;
   open: boolean;
   setOpen: (v: boolean) => void;
   webhook: TWebhook;
   surveys: TSurvey[];
+  isReadOnly: boolean;
 }
 
-export default function WebhookModal({ environmentId, open, setOpen, webhook, surveys }: WebhookModalProps) {
+export const WebhookModal = ({ open, setOpen, webhook, surveys, isReadOnly }: WebhookModalProps) => {
+  const t = useTranslations();
   const tabs = [
     {
-      title: "Overview",
+      title: t("common.overview"),
       children: <WebhookOverviewTab webhook={webhook} surveys={surveys} />,
     },
     {
-      title: "Settings",
+      title: t("common.settings"),
       children: (
-        <WebhookSettingsTab
-          environmentId={environmentId}
-          webhook={webhook}
-          surveys={surveys}
-          setOpen={setOpen}
-        />
+        <WebhookSettingsTab webhook={webhook} surveys={surveys} setOpen={setOpen} isReadOnly={isReadOnly} />
       ),
     },
   ];
@@ -44,4 +41,4 @@ export default function WebhookModal({ environmentId, open, setOpen, webhook, su
       />
     </>
   );
-}
+};

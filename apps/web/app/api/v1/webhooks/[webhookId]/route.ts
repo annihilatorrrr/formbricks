@@ -1,10 +1,12 @@
 import { responses } from "@/app/lib/api/response";
+import { headers } from "next/headers";
 import { getApiKeyFromKey } from "@formbricks/lib/apiKey/service";
 import { deleteWebhook, getWebhook } from "@formbricks/lib/webhook/service";
-import { headers } from "next/headers";
 
-export async function GET(_: Request, { params }: { params: { webhookId: string } }) {
-  const apiKey = headers().get("x-api-key");
+export const GET = async (_: Request, props: { params: Promise<{ webhookId: string }> }) => {
+  const params = await props.params;
+  const headersList = await headers();
+  const apiKey = headersList.get("x-api-key");
   if (!apiKey) {
     return responses.notAuthenticatedResponse();
   }
@@ -22,10 +24,12 @@ export async function GET(_: Request, { params }: { params: { webhookId: string 
     return responses.unauthorizedResponse();
   }
   return responses.successResponse(webhook);
-}
+};
 
-export async function DELETE(_: Request, { params }: { params: { webhookId: string } }) {
-  const apiKey = headers().get("x-api-key");
+export const DELETE = async (_: Request, props: { params: Promise<{ webhookId: string }> }) => {
+  const params = await props.params;
+  const headersList = await headers();
+  const apiKey = headersList.get("x-api-key");
   if (!apiKey) {
     return responses.notAuthenticatedResponse();
   }
@@ -51,4 +55,4 @@ export async function DELETE(_: Request, { params }: { params: { webhookId: stri
     console.error(e.message);
     return responses.notFoundResponse("Webhook", params.webhookId);
   }
-}
+};

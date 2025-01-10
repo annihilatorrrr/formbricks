@@ -45,3 +45,20 @@ packages/database/zod
 .direnv
 
 Zone.Identifier
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+
+# uploads
+packages/lib/uploads
+
+# Vite Timestamps
+*vite.config.*.timestamp-*
+
+# js compiled assets
+apps/web/public/js
+
+packages/database/migrations
