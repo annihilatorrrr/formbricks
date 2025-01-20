@@ -1,37 +1,35 @@
 "use client";
 
-import { DeleteDialog } from "@formbricks/ui/DeleteDialog";
-import { Button } from "@formbricks/ui/Button";
-import { Input } from "@formbricks/ui/Input";
-import { Label } from "@formbricks/ui/Label";
-import { TrashIcon } from "@heroicons/react/24/outline";
+import { SurveyCheckboxGroup } from "@/app/(app)/environments/[environmentId]/integrations/webhooks/components/SurveyCheckboxGroup";
+import { TriggerCheckboxGroup } from "@/app/(app)/environments/[environmentId]/integrations/webhooks/components/TriggerCheckboxGroup";
+import { validWebHookURL } from "@/app/(app)/environments/[environmentId]/integrations/webhooks/lib/utils";
+import { getFormattedErrorMessage } from "@/lib/utils/helper";
+import { Button } from "@/modules/ui/components/button";
+import { DeleteDialog } from "@/modules/ui/components/delete-dialog";
+import { Input } from "@/modules/ui/components/input";
+import { Label } from "@/modules/ui/components/label";
 import clsx from "clsx";
+import { TrashIcon } from "lucide-react";
+import { useTranslations } from "next-intl";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "react-hot-toast";
-import { TWebhook, TWebhookInput } from "@formbricks/types/webhooks";
-import { deleteWebhookAction, updateWebhookAction } from "../actions";
 import { TPipelineTrigger } from "@formbricks/types/pipelines";
-import { TSurvey } from "@formbricks/types/surveys";
-import { testEndpoint } from "@/app/(app)/environments/[environmentId]/integrations/webhooks/components/testEndpoint";
-import { triggers } from "@/app/(app)/environments/[environmentId]/integrations/webhooks/components/HardcodedTriggers";
-import TriggerCheckboxGroup from "@/app/(app)/environments/[environmentId]/integrations/webhooks/components/TriggerCheckboxGroup";
-import SurveyCheckboxGroup from "@/app/(app)/environments/[environmentId]/integrations/webhooks/components/SurveyCheckboxGroup";
+import { TSurvey } from "@formbricks/types/surveys/types";
+import { TWebhook, TWebhookInput } from "@formbricks/types/webhooks";
+import { deleteWebhookAction, testEndpointAction, updateWebhookAction } from "../actions";
 
 interface ActionSettingsTabProps {
-  environmentId: string;
   webhook: TWebhook;
   surveys: TSurvey[];
   setOpen: (v: boolean) => void;
+  isReadOnly: boolean;
 }
 
-export default function WebhookSettingsTab({
-  environmentId,
-  webhook,
-  surveys,
-  setOpen,
-}: ActionSettingsTabProps) {
+export const WebhookSettingsTab = ({ webhook, surveys, setOpen, isReadOnly }: ActionSettingsTabProps) => {
+  const t = useTranslations();
   const router = useRouter();
   const { register, handleSubmit } = useForm({
     defaultValues: {
@@ -53,15 +51,28 @@ export default function WebhookSettingsTab({
 
   const handleTestEndpoint = async (sendSuccessToast: boolean) => {
     try {
+      const { valid, error } = validWebHookURL(testEndpointInput);
+      if (!valid) {
+        toast.error(error ?? t("common.something_went_wrong_please_try_again"));
+        return;
+      }
       setHittingEndpoint(true);
-      await testEndpoint(testEndpointInput);
+      const testEndpointActionResult = await testEndpointAction({ url: testEndpointInput });
+      if (!testEndpointActionResult?.data) {
+        const errorMessage = getFormattedErrorMessage(testEndpointActionResult);
+        throw new Error(errorMessage);
+      }
       setHittingEndpoint(false);
-      if (sendSuccessToast) toast.success("Yay! We are able to ping the webhook!");
+      if (sendSuccessToast) toast.success(t("environments.integrations.webhooks.endpoint_pinged"));
       setEndpointAccessible(true);
       return true;
     } catch (err) {
       setHittingEndpoint(false);
-      toast.error("Oh no! We are unable to ping the webhook!");
+      toast.error(
+        `${t("environments.integrations.webhooks.endpoint_pinged_error")} \n ${err.message.length < 250 ? `${t("common.error")}:  ${err.message}` : t("environments.integrations.webhooks.please_check_console")}`,
+        { className: err.message.length < 250 ? "break-all" : "" }
+      );
+      console.error(t("environments.integrations.webhooks.webhook_test_failed_due_to"), err.message);
       setEndpointAccessible(false);
       return false;
     }
@@ -94,12 +105,12 @@ export default function WebhookSettingsTab({
 
   const onSubmit = async (data) => {
     if (selectedTriggers.length === 0) {
-      toast.error("Please select at least one trigger");
+      toast.error(t("common.please_select_at_least_one_trigger"));
       return;
     }
 
     if (!selectedAllSurveys && selectedSurveys.length === 0) {
-      toast.error("Please select at least one survey");
+      toast.error(t("common.please_select_at_least_one_survey"));
       return;
     }
     const endpointHitSuccessfully = await handleTestEndpoint(false);
@@ -115,9 +126,17 @@ export default function WebhookSettingsTab({
       surveyIds: selectedSurveys,
     };
     setIsUpdatingWebhook(true);
-    await updateWebhookAction(environmentId, webhook.id, updatedData);
-    toast.success("Webhook updated successfully.");
-    router.refresh();
+    const updateWebhookActionResult = await updateWebhookAction({
+      webhookId: webhook.id,
+      webhookInput: updatedData,
+    });
+    if (updateWebhookActionResult?.data) {
+      router.refresh();
+      toast.success(t("environments.integrations.webhooks.webhook_updated_successfully"));
+    } else {
+      const errorMessage = getFormattedErrorMessage(updateWebhookActionResult);
+      toast.error(errorMessage);
+    }
     setIsUpdatingWebhook(false);
     setOpen(false);
   };
@@ -126,20 +145,21 @@ export default function WebhookSettingsTab({
     <div>
       <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
         <div className="col-span-1">
-          <Label htmlFor="Name">Name</Label>
+          <Label htmlFor="Name">{t("common.name")}</Label>
           <div className="mt-1 flex">
             <Input
               type="text"
               id="name"
               {...register("name")}
+              disabled={isReadOnly}
               defaultValue={webhook.name ?? ""}
-              placeholder="Optional: Label your webhook for easy identification"
+              placeholder={t("environments.integrations.webhooks.webhook_name_placeholder")}
             />
           </div>
         </div>
 
         <div className="col-span-1">
-          <Label htmlFor="URL">URL</Label>
+          <Label htmlFor="URL">{t("common.url")}</Label>
           <div className="mt-1 flex">
             <Input
               {...register("url", {
@@ -152,16 +172,16 @@ export default function WebhookSettingsTab({
               }}
               readOnly={webhook.source !== "user"}
               className={clsx(
-                webhook.source === "user" ? null : "cursor-not-allowed bg-gray-100 text-gray-500",
+                webhook.source === "user" ? null : "cursor-not-allowed bg-slate-100 text-slate-500",
                 endpointAccessible === true
                   ? "border-green-500 bg-green-50"
                   : endpointAccessible === false
-                  ? "border-red-200 bg-red-50"
-                  : endpointAccessible === undefined
-                  ? "border-slate-200 bg-white"
-                  : null
+                    ? "border-red-200 bg-red-50"
+                    : endpointAccessible === undefined
+                      ? "border-slate-200 bg-white"
+                      : null
               )}
-              placeholder="Paste the URL you want the event to trigger on"
+              placeholder={t("environments.integrations.webhooks.webhook_url_placeholder")}
             />
             <Button
               type="button"
@@ -171,77 +191,78 @@ export default function WebhookSettingsTab({
               onClick={() => {
                 handleTestEndpoint(true);
               }}>
-              Test Endpoint
+              {t("environments.integrations.webhooks.test_endpoint")}
             </Button>
           </div>
         </div>
 
         <div>
-          <Label htmlFor="Triggers">Triggers</Label>
+          <Label htmlFor="Triggers">{t("environments.integrations.webhooks.triggers")}</Label>
           <TriggerCheckboxGroup
-            triggers={triggers}
             selectedTriggers={selectedTriggers}
             onCheckboxChange={handleCheckboxChange}
-            allowChanges={webhook.source === "user"}
+            allowChanges={webhook.source === "user" && !isReadOnly}
           />
         </div>
 
         <div>
-          <Label htmlFor="Surveys">Surveys</Label>
+          <Label htmlFor="Surveys">{t("common.surveys")}</Label>
           <SurveyCheckboxGroup
             surveys={surveys}
             selectedSurveys={selectedSurveys}
             selectedAllSurveys={selectedAllSurveys}
             onSelectAllSurveys={handleSelectAllSurveys}
             onSelectedSurveyChange={handleSelectedSurveyChange}
-            allowChanges={webhook.source === "user"}
+            allowChanges={webhook.source === "user" && !isReadOnly}
           />
         </div>
 
         <div className="flex justify-between border-t border-slate-200 py-6">
           <div>
-            {webhook.source === "user" && (
+            {webhook.source === "user" && !isReadOnly && (
               <Button
                 type="button"
-                variant="warn"
+                variant="destructive"
                 onClick={() => setOpenDeleteDialog(true)}
-                StartIcon={TrashIcon}
                 className="mr-3">
-                Delete
+                <TrashIcon />
+                {t("common.delete")}
               </Button>
             )}
 
-            <Button
-              variant="secondary"
-              href="https://formbricks.com/docs/api/management/webhooks"
-              target="_blank">
-              Read Docs
+            <Button variant="secondary" asChild>
+              <Link href="https://formbricks.com/docs/api/management/webhooks" target="_blank">
+                {t("common.read_docs")}
+              </Link>
             </Button>
           </div>
 
-          <div className="flex space-x-2">
-            <Button type="submit" variant="darkCTA" loading={isUpdatingWebhook}>
-              Save changes
-            </Button>
-          </div>
+          {!isReadOnly && (
+            <div className="flex space-x-2">
+              <Button type="submit" loading={isUpdatingWebhook}>
+                {t("common.save_changes")}
+              </Button>
+            </div>
+          )}
         </div>
       </form>
       <DeleteDialog
         open={openDeleteDialog}
         setOpen={setOpenDeleteDialog}
-        deleteWhat={"Webhook"}
-        text="Are you sure you want to delete this Webhook? This will stop sending you any further notifications."
+        deleteWhat={t("common.webhook")}
+        text={t("environments.integrations.webhooks.webhook_delete_confirmation")}
         onDelete={async () => {
           setOpen(false);
-          try {
-            await deleteWebhookAction(webhook.id);
+          const deleteWebhookActionResult = await deleteWebhookAction({ id: webhook.id });
+          if (deleteWebhookActionResult?.data) {
             router.refresh();
-            toast.success("Webhook deleted successfully");
-          } catch (error) {
-            toast.error("Something went wrong. Please try again.");
+            toast.success(t("environments.integrations.webhooks.webhook_deleted_successfully"));
+          } else {
+            const errorMessage = getFormattedErrorMessage(deleteWebhookActionResult);
+            toast.error(errorMessage);
           }
         }}
       />
     </div>
   );
-}
+};
