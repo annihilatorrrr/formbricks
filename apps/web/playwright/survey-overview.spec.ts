@@ -378,12 +378,16 @@ test.describe("Survey overview", () => {
     });
 
     await page.reload();
-    const linkRow = page.locator("div.relative.block", { has: page.getByText(linkSurveyName, { exact: true }) });
+    const linkRow = page.locator("div.relative.block", {
+      has: page.getByText(linkSurveyName, { exact: true }),
+    });
     await linkRow.locator("[data-testid='survey-dropdown-trigger']").click();
     await expect(page.getByRole("button", { name: "Preview", exact: true })).toBeVisible();
     await expect(page.getByTestId("copy-link")).toBeVisible();
 
-    const appRow = page.locator("div.relative.block", { has: page.getByText(appSurveyName, { exact: true }) });
+    const appRow = page.locator("div.relative.block", {
+      has: page.getByText(appSurveyName, { exact: true }),
+    });
     await expect(appRow.locator("[data-testid='survey-dropdown-trigger']")).toHaveCount(0);
   });
 });
