@@ -77,3 +77,6 @@ declare global {
     export type SurveyQuotaLogic = TSurveyQuotaLogic;
   }
 }
+
+export type TPrismaJsonTypesLoaded = true;
+export {};
